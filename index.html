@@ -1,116 +1,105 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
-  <title>Kana</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kana AI</title>
 
-  <!-- Puter AI -->
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1220">
+
   <script src="https://js.puter.com/v2/"></script>
 
-  <!-- PWA basic -->
-  <meta name="application-name" content="Kana">
-  <meta name="theme-color" content="#020617">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
     body {
       margin: 0;
-      background: #020617;
-      color: #f8fafc;
+      font-family: system-ui, sans-serif;
+      background: #0b1220;
+      color: white;
       display: flex;
       justify-content: center;
     }
 
     .app {
       width: 100%;
-      max-width: 420px;
+      max-width: 400px;
       height: 100vh;
       display: flex;
       flex-direction: column;
-      background: radial-gradient(circle at top, #020617, #000);
     }
 
     header {
-      padding: 14px;
       text-align: center;
-      font-weight: 600;
-      border-bottom: 1px solid #1e293b;
+      padding: 14px;
+      font-weight: bold;
+      border-bottom: 1px solid #1f2937;
     }
 
     #chat {
       flex: 1;
-      padding: 14px;
+      padding: 10px;
       overflow-y: auto;
     }
 
-    .msg {
-      max-width: 85%;
-      margin-bottom: 12px;
-      padding: 12px 14px;
+    .bubble {
+      max-width: 80%;
+      padding: 10px 14px;
+      margin: 6px 0;
       border-radius: 14px;
-      font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.4;
       white-space: pre-wrap;
-      word-wrap: break-word;
     }
 
     .user {
       background: #2563eb;
-      margin-left: auto;
+      align-self: flex-end;
     }
 
     .ai {
-      background: #1e293b;
-      margin-right: auto;
+      background: #1f2937;
+      align-self: flex-start;
     }
 
     footer {
-      padding: 10px;
-      border-top: 1px solid #1e293b;
+      padding: 8px;
+      border-top: 1px solid #1f2937;
     }
 
-    .input-row {
+    .row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
 
-    textarea {
+    input {
       flex: 1;
-      resize: none;
       padding: 10px;
-      border-radius: 10px;
+      border-radius: 8px;
       border: none;
-      font-size: 14px;
-      outline: none;
+      font-size: 16px;
     }
 
     button {
       border: none;
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 10px 14px;
-      font-weight: 600;
+      font-weight: bold;
       cursor: pointer;
     }
 
     .send {
       background: #22c55e;
-      color: #020617;
     }
 
     .reset {
+      margin-top: 6px;
       width: 100%;
-      margin-top: 8px;
       background: #ef4444;
-      color: #fff;
+      color: white;
     }
   </style>
 </head>
+
 <body>
   <div class="app">
     <header>Kana</header>
@@ -118,126 +107,87 @@
     <div id="chat"></div>
 
     <footer>
-      <!-- ❗ BUKAN FORM -->
-      <div class="input-row">
-        <textarea id="input" rows="1" placeholder="Ketik pesan..."></textarea>
-        <button type="button" class="send" onclick="send()">Kirim</button>
+      <div class="row">
+        <input id="input" placeholder="Ketik pesan..." />
+        <button class="send" onclick="send()">Kirim</button>
       </div>
-      <button type="button" class="reset" onclick="resetChat()">Reset Chat</button>
+      <button class="reset" onclick="resetChat()">Reset Chat</button>
     </footer>
   </div>
-
 <script>
-  const chatEl = document.getElementById("chat");
-  const inputEl = document.getElementById("input");
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
 
-  // ====== LOAD CACHE AMAN ======
-  let messages = [];
-  try {
-    const cached = JSON.parse(localStorage.getItem("chat"));
-    if (Array.isArray(cached)) messages = cached;
-  } catch {
-    messages = [];
+let messages = JSON.parse(localStorage.getItem("kana_chat")) || [];
+
+// 🔐 LOGIN PUTER (WAJIB)
+async function ensureLogin() {
+  if (!puter.auth.isSignedIn()) {
+    await puter.auth.signIn();
   }
+}
 
-  // ====== EXTRACTOR KHUSUS PUTER (WAJIB) ======
-  function extractText(res) {
-    if (typeof res === "string") return res;
+function render() {
+  chatEl.innerHTML = "";
+  messages.forEach(m => {
+    const div = document.createElement("div");
+    div.className = `bubble ${m.role}`;
+    div.textContent = m.content;
+    chatEl.appendChild(div);
+  });
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
 
-    // format paling umum dari puter.ai.chat
-    if (res?.choices?.[0]?.message?.content) {
-      return res.choices[0].message.content;
-    }
+render();
 
-    // fallback lain
-    if (typeof res?.message === "string") return res.message;
-    if (typeof res?.text === "string") return res.text;
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text) return;
 
-    return "⚠️ AI tidak mengembalikan teks.";
-  }
-
-  // ====== RENDER CHAT (ANTI OBJECT) ======
-  function render() {
-    chatEl.innerHTML = "";
-    messages.forEach(m => {
-      const div = document.createElement("div");
-      div.className = "msg " + m.role;
-
-      div.textContent =
-        typeof m.content === "string"
-          ? m.content
-          : extractText(m.content);
-
-      chatEl.appendChild(div);
-    });
-
-    chatEl.scrollTop = chatEl.scrollHeight;
-    saveClean();
-  }
-
-  // ====== SIMPAN CACHE BERSIH ======
-  function saveClean() {
-    const clean = messages.map(m => ({
-      role: m.role,
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : extractText(m.content)
-    }));
-
-    localStorage.setItem("chat", JSON.stringify(clean));
-  }
-
+  messages.push({ role: "user", content: text });
+  inputEl.value = "";
   render();
+  save();
 
-  // ====== KIRIM PESAN ======
-  function send() {
-    const text = inputEl.value.trim();
-    if (!text) return;
+  try {
+    await ensureLogin(); // 🔥 INI KUNCI UTAMA
 
-    messages.push({
-      role: "user",
-      content: text
+    const res = await puter.ai.chat({
+      model: "gpt-4o-mini",
+      messages: messages.map(m => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.content
+      }))
     });
 
-    inputEl.value = "";
-    render();
+    // 🔥 AMBIL TEKS SAJA
+    const aiText = res.choices?.[0]?.message?.content || "…";
 
-    const typingIndex = messages.push({
+    messages.push({ role: "ai", content: aiText });
+    render();
+    save();
+
+  } catch (err) {
+    console.error(err);
+    messages.push({
       role: "ai",
-      content: "Mengetik..."
-    }) - 1;
-
-    render();
-
-    puter.ai.chat(text, { model: "gpt-4o-mini" })
-      .then(res => {
-        messages[typingIndex].content = extractText(res);
-        limitCache();
-        render();
-      })
-      .catch(() => {
-        messages[typingIndex].content = "Terjadi kesalahan.";
-        render();
-      });
-  }
-
-  // ====== RESET CHAT ======
-  function resetChat() {
-    if (!confirm("Hapus semua chat?")) return;
-    messages = [];
-    localStorage.removeItem("chat");
+      content: "⚠️ Gagal terhubung ke AI. Pastikan login Puter."
+    });
     render();
   }
+}
 
-  // ====== BATASI CACHE ======
-  function limitCache() {
-    if (messages.length > 50) {
-      messages = messages.slice(-50);
-    }
-  }
+function save() {
+  localStorage.setItem("kana_chat", JSON.stringify(messages));
+}
+
+function resetChat() {
+  if (!confirm("Hapus semua chat?")) return;
+  messages = [];
+  save();
+  render();
+}
 </script>
 
 </body>
 </html>
-
