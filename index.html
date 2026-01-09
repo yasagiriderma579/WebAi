@@ -127,79 +127,117 @@
     </footer>
   </div>
 
-  <script>
-    const chatEl = document.getElementById("chat");
-    const inputEl = document.getElementById("input");
+<script>
+  const chatEl = document.getElementById("chat");
+  const inputEl = document.getElementById("input");
 
-    let messages = [];
+  // ====== LOAD CACHE AMAN ======
+  let messages = [];
+  try {
+    const cached = JSON.parse(localStorage.getItem("chat"));
+    if (Array.isArray(cached)) messages = cached;
+  } catch {
+    messages = [];
+  }
 
-    // Load cache aman
-    try {
-      messages = JSON.parse(localStorage.getItem("chat")) || [];
-    } catch {
-      messages = [];
+  // ====== EXTRACTOR KHUSUS PUTER (WAJIB) ======
+  function extractText(res) {
+    if (typeof res === "string") return res;
+
+    // format paling umum dari puter.ai.chat
+    if (res?.choices?.[0]?.message?.content) {
+      return res.choices[0].message.content;
     }
 
-    function render() {
-      chatEl.innerHTML = "";
-      messages.forEach(m => {
-        const div = document.createElement("div");
-        div.className = "msg " + m.role;
-        div.textContent = String(m.content);
-        chatEl.appendChild(div);
-      });
-      chatEl.scrollTop = chatEl.scrollHeight;
-      localStorage.setItem("chat", JSON.stringify(messages));
-    }
+    // fallback lain
+    if (typeof res?.message === "string") return res.message;
+    if (typeof res?.text === "string") return res.text;
+
+    return "⚠️ AI tidak mengembalikan teks.";
+  }
+
+  // ====== RENDER CHAT (ANTI OBJECT) ======
+  function render() {
+    chatEl.innerHTML = "";
+    messages.forEach(m => {
+      const div = document.createElement("div");
+      div.className = "msg " + m.role;
+
+      div.textContent =
+        typeof m.content === "string"
+          ? m.content
+          : extractText(m.content);
+
+      chatEl.appendChild(div);
+    });
+
+    chatEl.scrollTop = chatEl.scrollHeight;
+    saveClean();
+  }
+
+  // ====== SIMPAN CACHE BERSIH ======
+  function saveClean() {
+    const clean = messages.map(m => ({
+      role: m.role,
+      content:
+        typeof m.content === "string"
+          ? m.content
+          : extractText(m.content)
+    }));
+
+    localStorage.setItem("chat", JSON.stringify(clean));
+  }
+
+  render();
+
+  // ====== KIRIM PESAN ======
+  function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    messages.push({
+      role: "user",
+      content: text
+    });
+
+    inputEl.value = "";
+    render();
+
+    const typingIndex = messages.push({
+      role: "ai",
+      content: "Mengetik..."
+    }) - 1;
 
     render();
 
-    function send() {
-      const text = inputEl.value.trim();
-      if (!text) return;
+    puter.ai.chat(text, { model: "gpt-4o-mini" })
+      .then(res => {
+        messages[typingIndex].content = extractText(res);
+        limitCache();
+        render();
+      })
+      .catch(() => {
+        messages[typingIndex].content = "Terjadi kesalahan.";
+        render();
+      });
+  }
 
-      if (!Array.isArray(messages)) messages = [];
+  // ====== RESET CHAT ======
+  function resetChat() {
+    if (!confirm("Hapus semua chat?")) return;
+    messages = [];
+    localStorage.removeItem("chat");
+    render();
+  }
 
-      messages.push({ role: "user", content: text });
-      inputEl.value = "";
-      render();
-
-      const typingIndex = messages.push({
-        role: "ai",
-        content: "Mengetik..."
-      }) - 1;
-
-      render();
-
-      puter.ai.chat(text, { model: "gpt-4o-mini" })
-        .then(res => {
-          let reply =
-            typeof res === "string"
-              ? res
-              : res?.message || res?.text || "Tidak ada jawaban.";
-
-          messages[typingIndex].content = reply;
-          limitCache();
-          render();
-        })
-        .catch(() => {
-          messages[typingIndex].content = "Terjadi kesalahan.";
-          render();
-        });
+  // ====== BATASI CACHE ======
+  function limitCache() {
+    if (messages.length > 50) {
+      messages = messages.slice(-50);
     }
+  }
+</script>
 
-    function resetChat() {
-      if (!confirm("Hapus semua chat?")) return;
-      messages = [];
-      localStorage.removeItem("chat");
-      render();
-    }
-
-    function limitCache() {
-      if (messages.length > 50) {
-        messages = messages.slice(-50);
-      }
-    }
-  </script>
 </body>
 </html>
+
