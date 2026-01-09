@@ -2,29 +2,21 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
   <title>Kana</title>
-
-  <meta name="application-name" content="Kana">
-  <meta name="apple-mobile-web-app-title" content="Kana">
-
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="kana.png">
-
-  <meta name="theme-color" content="#020617">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
 
   <!-- Puter AI -->
   <script src="https://js.puter.com/v2/"></script>
 
+  <!-- PWA basic -->
+  <meta name="application-name" content="Kana">
+  <meta name="theme-color" content="#020617">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
   <style>
     * {
       box-sizing: border-box;
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     body {
@@ -41,30 +33,31 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
-      background: #020617;
+      background: radial-gradient(circle at top, #020617, #000);
     }
 
     header {
       padding: 14px;
       text-align: center;
-      font-weight: bold;
+      font-weight: 600;
       border-bottom: 1px solid #1e293b;
     }
 
     #chat {
       flex: 1;
-      padding: 12px;
+      padding: 14px;
       overflow-y: auto;
     }
 
     .msg {
       max-width: 85%;
-      margin-bottom: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
       font-size: 14px;
-      line-height: 1.4;
+      line-height: 1.5;
       white-space: pre-wrap;
+      word-wrap: break-word;
     }
 
     .user {
@@ -84,34 +77,37 @@
 
     .input-row {
       display: flex;
-      gap: 6px;
+      gap: 8px;
     }
 
     textarea {
       flex: 1;
       resize: none;
-      padding: 8px;
-      border-radius: 8px;
+      padding: 10px;
+      border-radius: 10px;
       border: none;
       font-size: 14px;
       outline: none;
     }
 
     button {
-      padding: 8px 12px;
-      border-radius: 8px;
       border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .send {
       background: #22c55e;
       color: #020617;
-      font-weight: bold;
-      cursor: pointer;
     }
 
     .reset {
       width: 100%;
-      margin-top: 6px;
+      margin-top: 8px;
       background: #ef4444;
-      color: white;
+      color: #fff;
     }
   </style>
 </head>
@@ -122,50 +118,88 @@
     <div id="chat"></div>
 
     <footer>
+      <!-- ❗ BUKAN FORM -->
       <div class="input-row">
         <textarea id="input" rows="1" placeholder="Ketik pesan..."></textarea>
-        <button onclick="send()">Kirim</button>
+        <button type="button" class="send" onclick="send()">Kirim</button>
       </div>
-      <button class="reset" onclick="resetChat()">Reset Chat</button>
+      <button type="button" class="reset" onclick="resetChat()">Reset Chat</button>
     </footer>
   </div>
-<script>
-async function send() {
-  const text = inputEl.value.trim();
-  if (!text) return;
 
-  messages.push({ role: "user", content: text });
-  inputEl.value = "";
-  render();
+  <script>
+    const chatEl = document.getElementById("chat");
+    const inputEl = document.getElementById("input");
 
-  const typingIndex = messages.push({
-    role: "ai",
-    content: "Mengetik..."
-  }) - 1;
-  render();
+    let messages = [];
 
-  try {
-    const response = await puter.ai.chat(text, {
-      model: "gpt-4o-mini"
-    });
+    // Load cache aman
+    try {
+      messages = JSON.parse(localStorage.getItem("chat")) || [];
+    } catch {
+      messages = [];
+    }
 
-    // 🔑 FIX UTAMA
-    let reply =
-      typeof response === "string"
-        ? response
-        : response?.message || response?.text || "Tidak ada jawaban.";
+    function render() {
+      chatEl.innerHTML = "";
+      messages.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "msg " + m.role;
+        div.textContent = String(m.content);
+        chatEl.appendChild(div);
+      });
+      chatEl.scrollTop = chatEl.scrollHeight;
+      localStorage.setItem("chat", JSON.stringify(messages));
+    }
 
-    messages[typingIndex].content = reply;
+    render();
 
-  } catch (err) {
-    messages[typingIndex].content = "Terjadi kesalahan.";
-  }
+    function send() {
+      const text = inputEl.value.trim();
+      if (!text) return;
 
-  render();
-}
-</script>
+      if (!Array.isArray(messages)) messages = [];
 
+      messages.push({ role: "user", content: text });
+      inputEl.value = "";
+      render();
+
+      const typingIndex = messages.push({
+        role: "ai",
+        content: "Mengetik..."
+      }) - 1;
+
+      render();
+
+      puter.ai.chat(text, { model: "gpt-4o-mini" })
+        .then(res => {
+          let reply =
+            typeof res === "string"
+              ? res
+              : res?.message || res?.text || "Tidak ada jawaban.";
+
+          messages[typingIndex].content = reply;
+          limitCache();
+          render();
+        })
+        .catch(() => {
+          messages[typingIndex].content = "Terjadi kesalahan.";
+          render();
+        });
+    }
+
+    function resetChat() {
+      if (!confirm("Hapus semua chat?")) return;
+      messages = [];
+      localStorage.removeItem("chat");
+      render();
+    }
+
+    function limitCache() {
+      if (messages.length > 50) {
+        messages = messages.slice(-50);
+      }
+    }
+  </script>
 </body>
 </html>
-
-
