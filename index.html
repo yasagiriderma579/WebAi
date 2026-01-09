@@ -115,72 +115,75 @@
     </footer>
   </div>
 <script>
-const chatEl = document.getElementById("chat");
-const inputEl = document.getElementById("input");
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
 
 let messages = JSON.parse(localStorage.getItem("kana_chat")) || [];
 
-// 🔐 LOGIN PUTER (WAJIB)
+// ===== LOGIN PUTER (WAJIB) =====
 async function ensureLogin() {
   if (!puter.auth.isSignedIn()) {
     await puter.auth.signIn();
   }
 }
 
+// ===== RENDER =====
 function render() {
-  chatEl.innerHTML = "";
+  chat.innerHTML = "";
   messages.forEach(m => {
     const div = document.createElement("div");
-    div.className = `bubble ${m.role}`;
+    div.className = "bubble " + m.role;
     div.textContent = m.content;
-    chatEl.appendChild(div);
+    chat.appendChild(div);
   });
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-render();
-
-async function send() {
-  const text = inputEl.value.trim();
-  if (!text) return;
-
-  messages.push({ role: "user", content: text });
-  inputEl.value = "";
-  render();
-  save();
-
-  try {
-    await ensureLogin(); // 🔥 INI KUNCI UTAMA
-
-    const res = await puter.ai.chat({
-      model: "gpt-4o-mini",
-      messages: messages.map(m => ({
-        role: m.role === "ai" ? "assistant" : "user",
-        content: m.content
-      }))
-    });
-
-    // 🔥 AMBIL TEKS SAJA
-    const aiText = res.choices?.[0]?.message?.content || "…";
-
-    messages.push({ role: "ai", content: aiText });
-    render();
-    save();
-
-  } catch (err) {
-    console.error(err);
-    messages.push({
-      role: "ai",
-      content: "⚠️ Gagal terhubung ke AI. Pastikan login Puter."
-    });
-    render();
-  }
+  chat.scrollTop = chat.scrollHeight;
 }
 
 function save() {
   localStorage.setItem("kana_chat", JSON.stringify(messages));
 }
 
+render();
+
+// ===== KIRIM =====
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  messages.push({ role: "user", content: text });
+  input.value = "";
+  render();
+  save();
+
+  try {
+    await ensureLogin();
+
+    // ⬇️ PUTER HARUS STRING
+    const res = await puter.ai.chat(text, {
+      model: "gpt-4o-mini"
+    });
+
+    // ⬇️ AMBIL TEKS SAJA
+    const aiText =
+      res?.message?.content ||
+      res?.choices?.[0]?.message?.content ||
+      "AI tidak membalas.";
+
+    messages.push({ role: "ai", content: aiText });
+    render();
+    save();
+
+  } catch (e) {
+    console.error(e);
+    messages.push({
+      role: "ai",
+      content: "⚠️ AI Error (cek console)"
+    });
+    render();
+  }
+}
+
+// ===== RESET =====
 function resetChat() {
   if (!confirm("Hapus semua chat?")) return;
   messages = [];
@@ -191,4 +194,3 @@ function resetChat() {
 
 </body>
 </html>
-
